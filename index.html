@@ -1,0 +1,386 @@
+<title>Сбор сигнала</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#06070b;
+    --ink:#eef0f4;
+    --ink-dim:#9aa3b8;
+    --ink-faint:#5b6274;
+    --accent-cyan:#5fe1d1;
+    --accent-indigo:#6a6ff0;
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--bg);
+    overflow:hidden;
+  }
+
+  #scene{
+    position:fixed;
+    inset:0;
+    z-index:0;
+    display:block;
+    width:100%;
+    height:100%;
+  }
+
+  .vignette{
+    position:fixed;
+    inset:0;
+    z-index:1;
+    pointer-events:none;
+    background:
+      radial-gradient(ellipse at 64% 36%, rgba(95,225,209,0.06), transparent 55%),
+      radial-gradient(ellipse at 50% 105%, rgba(0,0,0,.6), transparent 58%),
+      linear-gradient(180deg, rgba(0,0,0,.3), transparent 22%, transparent 68%, rgba(0,0,0,.55));
+  }
+
+  .stage{
+    position:fixed;
+    inset:0;
+    z-index:2;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:clamp(20px,4vw,56px);
+    pointer-events:none;
+  }
+
+  .mark{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:.72rem;
+    letter-spacing:.14em;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+  }
+
+  .dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--accent-cyan);
+    box-shadow:0 0 8px 1px var(--accent-cyan);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse{
+    0%,100%{ opacity:.4; transform:scale(.8); }
+    50%{ opacity:1; transform:scale(1.15); }
+  }
+
+  .content{
+    max-width:640px;
+    margin-top:auto;
+    padding-bottom:clamp(24px,5vh,64px);
+  }
+
+  .eyebrow{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:.72rem;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:var(--accent-cyan);
+    margin:0 0 18px;
+    transition:opacity .35s ease;
+    opacity:1;
+  }
+  .eyebrow.fade-out{ opacity:0; }
+
+  .statusbar{
+    display:flex;
+    gap:clamp(20px,4vw,48px);
+    border-top:1px solid rgba(255,255,255,.08);
+    padding-top:16px;
+    flex-wrap:wrap;
+  }
+
+  .stat{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+
+  .stat-label{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:.65rem;
+    letter-spacing:.12em;
+    color:var(--ink-faint);
+    text-transform:uppercase;
+  }
+
+  .stat-value{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:.85rem;
+    color:var(--ink-dim);
+    font-variant-numeric:tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .dot{ animation:none; opacity:.8; }
+    .eyebrow{ transition:none; }
+  }
+
+  @media (max-width: 560px){
+    .statusbar{ gap:22px; }
+  }
+</style>
+
+<canvas id="scene" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<div class="stage">
+  <header class="mark">
+    <span class="dot" aria-hidden="true"></span>
+    <span>Новая сборка</span>
+  </header>
+
+  <main class="content">
+    <p class="eyebrow" id="eyebrow">СБОРКА СИГНАЛА</p>
+  </main>
+
+  <footer class="statusbar">
+    <div class="stat">
+      <span class="stat-label">В работе</span>
+      <span class="stat-value" id="uptime">00:00:00</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Узлов</span>
+      <span class="stat-value" id="nodesCount">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Связей</span>
+      <span class="stat-value" id="linksCount">0</span>
+    </div>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // ---- uptime clock (real elapsed time since load) ----
+  var startTime = Date.now();
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function updateUptime(){
+    var diff = Math.floor((Date.now() - startTime) / 1000);
+    var hh = Math.floor(diff/3600), mm = Math.floor((diff%3600)/60), ss = diff%60;
+    var el = document.getElementById('uptime');
+    if (el) el.textContent = pad(hh)+':'+pad(mm)+':'+pad(ss);
+  }
+  updateUptime();
+  setInterval(updateUptime, 1000);
+
+  // ---- status ticker ----
+  var phrases = ['СБОРКА СИГНАЛА','КАЛИБРОВКА ОРБИТ','ОЖИДАНИЕ ЗАПУСКА'];
+  var pIdx = 0;
+  var eyebrowEl = document.getElementById('eyebrow');
+  function cyclePhrase(){
+    if (!eyebrowEl) return;
+    if (REDUCED){
+      pIdx = (pIdx+1) % phrases.length;
+      eyebrowEl.textContent = phrases[pIdx];
+      return;
+    }
+    eyebrowEl.classList.add('fade-out');
+    setTimeout(function(){
+      pIdx = (pIdx+1) % phrases.length;
+      eyebrowEl.textContent = phrases[pIdx];
+      eyebrowEl.classList.remove('fade-out');
+    }, 350);
+  }
+  setInterval(cyclePhrase, 3200);
+
+  // ---- three.js particle field ----
+  if (typeof THREE === 'undefined') return;
+
+  var canvas = document.getElementById('scene');
+  var renderer, scene, camera, field, points, lines, geometry, lineGeometry;
+  var NODES = 480;
+  var MAX_LINES = 700;
+  var positions, basePositions, phases2, freqs, axes, colors, linePositions;
+
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x06070b, 1);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 9);
+
+    function resize(){
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function makeDotTexture(){
+      var size = 128;
+      var c = document.createElement('canvas');
+      c.width = c.height = size;
+      var ctx = c.getContext('2d');
+      var g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.25, 'rgba(255,255,255,0.9)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, size, size);
+      return new THREE.CanvasTexture(c);
+    }
+
+    positions = new Float32Array(NODES*3);
+    basePositions = new Float32Array(NODES*3);
+    phases2 = new Float32Array(NODES);
+    freqs = new Float32Array(NODES);
+    axes = new Float32Array(NODES*3);
+    colors = new Float32Array(NODES*3);
+
+    var colorA = new THREE.Color('#6a6ff0');
+    var colorB = new THREE.Color('#5fe1d1');
+
+    for (var i = 0; i < NODES; i++){
+      var r = 2 + Math.pow(Math.random(), 0.5) * 4.2;
+      var theta = Math.random() * Math.PI * 2;
+      var phi = Math.acos(Math.random() * 2 - 1);
+      var x = r * Math.sin(phi) * Math.cos(theta);
+      var y = r * Math.sin(phi) * Math.sin(theta) * 0.7;
+      var z = r * Math.cos(phi);
+      positions[i*3] = x; positions[i*3+1] = y; positions[i*3+2] = z;
+      basePositions[i*3] = x; basePositions[i*3+1] = y; basePositions[i*3+2] = z;
+      phases2[i] = Math.random() * Math.PI * 2;
+      freqs[i] = 0.15 + Math.random() * 0.25;
+      var ax = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
+      axes[i*3] = ax.x; axes[i*3+1] = ax.y; axes[i*3+2] = ax.z;
+      var t = Math.min(1, r / 6.2);
+      var col = colorA.clone().lerp(colorB, t);
+      colors[i*3] = col.r; colors[i*3+1] = col.g; colors[i*3+2] = col.b;
+    }
+
+    geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    var material = new THREE.PointsMaterial({
+      size: 0.16,
+      map: makeDotTexture(),
+      transparent: true,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0.95,
+      sizeAttenuation: true
+    });
+
+    points = new THREE.Points(geometry, material);
+
+    linePositions = new Float32Array(MAX_LINES * 2 * 3);
+    lineGeometry = new THREE.BufferGeometry();
+    var lineAttr = new THREE.BufferAttribute(linePositions, 3);
+    lineAttr.setUsage(THREE.DynamicDrawUsage);
+    lineGeometry.setAttribute('position', lineAttr);
+    lineGeometry.setDrawRange(0, 0);
+
+    var lineMaterial = new THREE.LineBasicMaterial({
+      color: 0x5fe1d1,
+      transparent: true,
+      opacity: 0.15,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+
+    field = new THREE.Group();
+    field.add(points);
+    field.add(lines);
+    scene.add(field);
+
+    var nodesEl = document.getElementById('nodesCount');
+    if (nodesEl) nodesEl.textContent = String(NODES);
+
+    var linksEl = document.getElementById('linksCount');
+    function recomputeConnections(){
+      var thresh = 1.35, threshSq = thresh*thresh, idx = 0;
+      outer:
+      for (var a = 0; a < NODES; a++){
+        var ax2 = a*3;
+        for (var b = a+1; b < NODES; b++){
+          var bx = b*3;
+          var dx = positions[ax2] - positions[bx];
+          var dy = positions[ax2+1] - positions[bx+1];
+          var dz = positions[ax2+2] - positions[bx+2];
+          var d2 = dx*dx + dy*dy + dz*dz;
+          if (d2 < threshSq){
+            if (idx >= MAX_LINES) break outer;
+            var li = idx*6;
+            linePositions[li]   = positions[ax2];   linePositions[li+1] = positions[ax2+1]; linePositions[li+2] = positions[ax2+2];
+            linePositions[li+3] = positions[bx];     linePositions[li+4] = positions[bx+1];   linePositions[li+5] = positions[bx+2];
+            idx++;
+          }
+        }
+      }
+      lineGeometry.attributes.position.needsUpdate = true;
+      lineGeometry.setDrawRange(0, idx*2);
+      if (linksEl) linksEl.textContent = String(idx);
+    }
+
+    var mouseX = 0, mouseY = 0, camX = 0, camY = 0;
+    window.addEventListener('mousemove', function(e){
+      mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+      mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+    });
+
+    var clock = new THREE.Clock();
+    var frame = 0;
+    var rafId = null;
+
+    function tick(){
+      if (document.hidden){ rafId = requestAnimationFrame(tick); return; }
+      var t = clock.getElapsedTime();
+      frame++;
+
+      for (var i = 0; i < NODES; i++){
+        var ix = i*3;
+        var s = Math.sin(t * freqs[i] + phases2[i]) * 0.35;
+        positions[ix]   = basePositions[ix]   + axes[ix]   * s;
+        positions[ix+1] = basePositions[ix+1] + axes[ix+1] * s;
+        positions[ix+2] = basePositions[ix+2] + axes[ix+2] * s;
+      }
+      geometry.attributes.position.needsUpdate = true;
+
+      field.rotation.y = t * 0.045;
+      field.rotation.x = Math.sin(t * 0.08) * 0.08;
+
+      if (frame % 20 === 0) recomputeConnections();
+
+      camX += (mouseX * 0.6 - camX) * 0.04;
+      camY += (-mouseY * 0.4 - camY) * 0.04;
+      camera.position.x = camX;
+      camera.position.y = camY;
+      camera.lookAt(0, 0, 0);
+
+      renderer.render(scene, camera);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    recomputeConnections();
+    renderer.render(scene, camera);
+
+    if (!REDUCED){
+      rafId = requestAnimationFrame(tick);
+    }
+  } catch (err) {
+    // WebGL unavailable — page still reads fine on the plain dark ground.
+    if (canvas) canvas.style.display = 'none';
+  }
+})();
+</script>
