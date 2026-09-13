@@ -220,11 +220,9 @@
     <p class="eyebrow" id="eyebrow">СБОРКА СИГНАЛА</p>
 
     <!-- Адрес проекта «Уровни». Менять здесь и только здесь.
-         Эта копия обслуживает GitHub Pages, где нет бэкенда, поэтому кнопка ведёт
-         на полный адрес VPS. На самом VPS (/var/www/signal-drift) в кнопке стоит
-         относительный /levels/ — он переживёт привязку домена и переход на https.
-         Когда у VPS появится домен, заменить IP здесь на https://домен/levels/. -->
-    <a class="jump" id="jump" href="http://64.188.104.206/levels/">
+         HTTPS сайта живёт на порту 8443: порт 443 занят VPN (Xray Reality на этом же
+         сервере), поэтому сертификат Let's Encrypt отдаётся с :8443. -->
+    <a class="jump" id="jump" href="https://levels-b.mooo.com:8443/levels/">
       Гиперпрыжок
       <span class="arrow" aria-hidden="true">&#8594;</span>
     </a>
