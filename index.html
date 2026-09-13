@@ -125,9 +125,78 @@
     font-variant-numeric:tabular-nums;
   }
 
+  /* Кнопка перехода к проекту «Уровни» */
+  .jump{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    margin-top:4px;
+    padding:12px 20px;
+    border:1px solid rgba(95,225,209,.35);
+    border-radius:3px;
+    background:linear-gradient(180deg, rgba(95,225,209,.10), rgba(106,111,240,.10));
+    color:var(--ink);
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:.78rem;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    text-decoration:none;
+    cursor:pointer;
+    pointer-events:auto;          /* .stage гасит события — кнопке их надо вернуть */
+    transition:border-color .25s ease, background .25s ease, transform .25s ease, box-shadow .25s ease;
+  }
+
+  .jump:hover,
+  .jump:focus-visible{
+    border-color:var(--accent-cyan);
+    background:linear-gradient(180deg, rgba(95,225,209,.18), rgba(106,111,240,.18));
+    box-shadow:0 0 24px -6px var(--accent-cyan);
+    transform:translateY(-1px);
+    outline:none;
+  }
+
+  .jump:active{ transform:translateY(0); }
+
+  .jump .arrow{
+    color:var(--accent-cyan);
+    transition:transform .25s ease;
+  }
+  .jump:hover .arrow{ transform:translateX(4px); }
+
+  /* Сам «гиперпрыжок»: поле частиц разгоняется, экран засвечивается */
+  #scene{
+    transition:transform .68s cubic-bezier(.55,0,.9,.25), filter .68s ease-in;
+  }
+
+  body.warp #scene{
+    transform:scale(1.6);
+    filter:blur(3px) brightness(1.8);
+  }
+
+  body.warp .stage{
+    opacity:0;
+    transition:opacity .4s ease-in;
+  }
+
+  .flash{
+    position:fixed;
+    inset:0;
+    z-index:3;
+    pointer-events:none;
+    opacity:0;
+    background:radial-gradient(circle at 50% 50%, rgba(95,225,209,.85), rgba(106,111,240,.5) 45%, transparent 75%);
+  }
+
+  body.warp .flash{
+    opacity:1;
+    transition:opacity .58s ease-in;
+  }
+
   @media (prefers-reduced-motion: reduce){
     .dot{ animation:none; opacity:.8; }
     .eyebrow{ transition:none; }
+    .jump{ transition:none; }
+    #scene{ transition:none; }
   }
 
   @media (max-width: 560px){
@@ -139,6 +208,7 @@
 
 <canvas id="scene" aria-hidden="true"></canvas>
 <div class="vignette" aria-hidden="true"></div>
+<div class="flash" id="flash" aria-hidden="true"></div>
 
 <div class="stage">
   <header class="mark">
@@ -148,6 +218,16 @@
 
   <main class="content">
     <p class="eyebrow" id="eyebrow">СБОРКА СИГНАЛА</p>
+
+    <!-- Адрес проекта «Уровни». Менять здесь и только здесь.
+         Эта копия обслуживает GitHub Pages, где нет бэкенда, поэтому кнопка ведёт
+         на полный адрес VPS. На самом VPS (/var/www/signal-drift) в кнопке стоит
+         относительный /levels/ — он переживёт привязку домена и переход на https.
+         Когда у VPS появится домен, заменить IP здесь на https://домен/levels/. -->
+    <a class="jump" id="jump" href="http://64.188.104.206/levels/">
+      Гиперпрыжок
+      <span class="arrow" aria-hidden="true">&#8594;</span>
+    </a>
   </main>
 
   <footer class="statusbar">
@@ -165,6 +245,34 @@
     </div>
   </footer>
 </div>
+
+<script>
+/* Гиперпрыжок: разгоняем поле частиц, потом уходим на «Уровни».
+   Ссылка настоящая, так что без JS, по Cmd/Ctrl-клику и средней кнопкой
+   всё работает обычным образом — перехватываем только простой левый клик. */
+(function(){
+  "use strict";
+  var link = document.getElementById('jump');
+  if (!link) return;
+
+  var reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  link.addEventListener('click', function(event){
+    if (reduced) return;                                   // без анимации — сразу переход
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.button !== 0) return;                        // новая вкладка / новое окно
+
+    event.preventDefault();
+    document.body.classList.add('warp');
+
+    var url = link.getAttribute('href');
+    var jumped = false;
+    var go = function(){ if (!jumped) { jumped = true; window.location.href = url; } };
+
+    setTimeout(go, 620);
+  });
+})();
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
